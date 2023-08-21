@@ -11,6 +11,8 @@
 #define SIZE 1024  
 #define CONNECTIONS 1000
 
+int clients[CONNECTIONS];
+
 int server_init(int *listen_sock);
 void handle_client_request(int SLOT);
 void check_for_parameters(char *route);
@@ -28,25 +30,37 @@ int main() {
     
     printf("Server running on:  http://127.0.0.1:%d\n",PORT );
 
+    int i;
+    int SLOT = 0;
+    socklen_t ADDRLen;
+
+    for (i = 0; i < CONNECTIONS; i++)
+        clients[i] = -1;
+
     while (1) {
         struct sockaddr_in clientaddr;
         socklen_t clientaddr_len = sizeof(clientaddr);
 
-        int client = accept(listen_sock, (struct sockaddr*)&clientaddr, &clientaddr_len); // accept connection and read data
-        if ( client< 0) {
+        clients[SLOT] = accept(listen_sock, (struct sockaddr*)&clientaddr, &clientaddr_len); // accept connection and read data
+        if ( clients[SLOT] < 0) {
             fprintf(stderr, "Failed to accept.\n");
             continue;
         }
-        else{
+        else if (fork() == 0){
             printf("---- client connected ----\n");
-            handle_client_request(client);
+            printf("Client Number: %d \n", SLOT);
+            handle_client_request(SLOT);
             continue;
         }
 
+        while (clients[SLOT] != -1){
+          SLOT = (SLOT + 1) % CONNECTIONS;
+        }
     }
     close(listen_sock);
     return 0;
 }
+
 
 //To initiate the server
 int server_init(int *listen_sock){
@@ -72,6 +86,67 @@ int server_init(int *listen_sock){
         return -1;
     }
     return 0; 
+}
+
+//To handle all types of client requests
+void handle_client_request(int SLOT){
+    char buffer[SIZE]; 
+    int is_read = read(clients[SLOT], buffer, SIZE);
+
+    if (is_read < 0) {
+        error(clients[SLOT]);
+        return;
+    } 
+
+    char method[10], endpoint[100], *post_data;
+    sscanf(buffer, "%s %s", method, endpoint);
+    printf("Request Type: %s \nEndpoint:%s \n\n", method, endpoint);
+
+    check_for_parameters(endpoint);
+
+    if(strcmp(method, "POST") == 0) {
+        if (strcmp(endpoint, "/api/submitForm") == 0) {
+          handle_post_request(clients[SLOT], buffer, is_read);
+        } 
+        else if (strcmp(endpoint, "/api/update") == 0) {
+          handle_post_request(clients[SLOT], buffer, is_read);
+        } 
+        else {
+          serve_error_file(clients[SLOT]);
+        } 
+  }
+    
+  else if (strcmp(method, "GET") == 0) {
+      if (strcmp(endpoint, "/api/getAll") == 0) {
+        handle_get_request(clients[SLOT], endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getNames") == 0) {
+        handle_get_request(clients[SLOT], endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getUsers") == 0) {
+        handle_get_request(clients[SLOT], endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getImage") == 0) {
+        handle_get_request(clients[SLOT], endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getText") == 0) {
+        handle_get_request(clients[SLOT], endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getPDF") == 0) {
+        handle_get_request(clients[SLOT], endpoint);
+      } 
+      else if (strcmp(endpoint, "/") == 0) {
+        handle_get_request(clients[SLOT], endpoint);
+      } 
+      else {
+        serve_error_file(clients[SLOT]);
+      } 
+  } 
+
+  else {
+      serve_error_file(clients[SLOT]);
+  }
+  close(clients[SLOT]);
 }
 
 //To check the parameter in the request endpoint
@@ -115,72 +190,158 @@ void serve_error_file(int client_sock) {
   free(response_data);
 }
 
+//To serve the GET Requests
+void handle_get_request(int client_sock, char *route) {
+  char file_path[100];
+  int is_index_file = -1;
+  char *endpoint_token;
 
-//To handle all types of client requests
-void handle_client_request(int SLOT){
-    char buffer[SIZE]; 
-    int is_read = read(SLOT, buffer, SIZE);
-
-    if (is_read < 0) {
-        error(SLOT);
-        return;
-    } 
-
-    char method[10], endpoint[100], *post_data;
-    sscanf(buffer, "%s %s", method, endpoint);
-    printf("Request Type: %s \nEndpoint:%s \n\n", method, endpoint);
-
-    check_for_parameters(endpoint);
-
-    if(strcmp(method, "POST") == 0) {
-        if (strcmp(endpoint, "/api/submitForm") == 0) {
-          handle_post_request(SLOT, buffer, is_read);
-        } 
-        else if (strcmp(endpoint, "/api/update") == 0) {
-          handle_post_request(SLOT, buffer, is_read);
-        } 
-        else {
-          serve_error_file(SLOT);
-        } 
+  if (strcmp(route, "/") == 0 ){
+    strcpy(file_path, "GET_api/index.html");
+    is_index_file = 1;
   }
-    
-  else if (strcmp(method, "GET") == 0) {
-      if (strcmp(endpoint, "/api/getAll") == 0) {
-        handle_get_request(SLOT, endpoint);
-      } 
-      else if (strcmp(endpoint, "/api/getNames") == 0) {
-        handle_get_request(SLOT, endpoint);
-      } 
-      else if (strcmp(endpoint, "/api/getUsers") == 0) {
-        handle_get_request(SLOT, endpoint);
-      } 
-      else if (strcmp(endpoint, "/api/getImage") == 0) {
-        handle_get_request(SLOT, endpoint);
-      } 
-      else if (strcmp(endpoint, "/api/getText") == 0) {
-        handle_get_request(SLOT, endpoint);
-      } 
-      else if (strcmp(endpoint, "/api/getPDF") == 0) {
-        handle_get_request(SLOT, endpoint);
-      } 
-      else if (strcmp(endpoint, "/") == 0) {
-        handle_get_request(SLOT, endpoint);
-      } 
-      else {
-        serve_error_file(SLOT);
-      } 
-  } 
-
-  else {
-      serve_error_file(SLOT);
+  else{
+    endpoint_token = strtok(route, "/"); 
+    endpoint_token = strtok(NULL, "/");
+    strcpy(file_path, "GET_api/");
+    strcat(file_path, endpoint_token);
+    is_index_file = -1;
   }
-  close(SLOT);
+
+  if(is_index_file < 0 && strcmp(endpoint_token, "getImage") == 0){
+    FILE *fp = fopen("public/sample.jpg", "rb");
+    if (fp == NULL) {
+      printf("Could not open file \n");
+      serve_error_file(client_sock);
+      return;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    int file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    char http_header[8192];
+    sprintf(http_header,
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: image/jpeg\r\n"
+            "Content-Length: %d\r\n\r\n",
+            file_size);
+
+    write(client_sock, http_header, strlen(http_header));
+
+    char buffer[8192];
+    size_t bytesRead;
+
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+      write(client_sock, buffer, bytesRead);
+    }
+
+    fclose(fp);
+  }
+  else if(is_index_file < 0 && strcmp(endpoint_token, "getPDF") == 0){
+    FILE *fp = fopen("public/sample.pdf", "rb");
+    if (fp == NULL) {
+      printf("Could not open file \n");
+      serve_error_file(client_sock);
+      return;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    int file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    char http_header[8192];
+    sprintf(http_header,
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/pdf\r\n"
+            "Content-Length: %d\r\n\r\n",
+            file_size);
+
+    write(client_sock, http_header, strlen(http_header));
+
+    char buffer[8192];
+    size_t bytesRead;
+
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+      write(client_sock, buffer, bytesRead);
+    }
+    fclose(fp);
+  }
+  else if(is_index_file < 0 && strcmp(endpoint_token, "getText") == 0){
+    FILE *fp = fopen("public/sample.txt", "rb");
+    if (fp == NULL) {
+      printf("Could not open file \n");
+      serve_error_file(client_sock);
+      return;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    int file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    char http_header[8192];
+    sprintf(http_header,
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %d\r\n\r\n",
+            file_size);
+
+    write(client_sock, http_header, strlen(http_header));
+
+    char buffer[8192];
+    size_t bytesRead;
+
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+      write(client_sock, buffer, bytesRead);
+    }
+    fclose(fp);
+  }
+  else{
+    const char *is_dot = strrchr(file_path, '.');
+    if (!is_dot || is_dot == file_path){
+      strcat(file_path, ".html");
+    }
+
+    FILE *fp = fopen(file_path, "r");
+
+    if (fp == NULL) {
+      printf("Could not open file \n");
+      serve_error_file(client_sock);
+      return;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long fsize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    char* response_data = malloc(sizeof(char) * (fsize+1));
+    char ch;
+    int i = 0;
+    while((ch = fgetc(fp)) != EOF) {
+        response_data[i] = ch;
+        i++;
+    }
+
+    fclose(fp);
+
+    char http_header[4096] = " ";
+    sprintf(http_header,
+          "HTTP/1.1 200 OK\r\n"
+          "Content-Type: text/html\r\n\n");
+
+    strcat(http_header, response_data);
+    strcat(http_header, "\r\n\r\n");
+
+    send(client_sock, http_header, sizeof(http_header), 0);
+    free(response_data);
+  }
+  close(client_sock);
 }
-
 
 //To serve the POST Requests
 void handle_post_request(int client_sock, char *buffer, int bytes_received) {
    char *value = malloc(sizeof(char) * bytes_received);
+  
   value = buffer;
 
   printf("-------- Request Body -------- \n");
