@@ -43,3 +43,29 @@ int main() {
     close(listen_sock);
     return 0;
 }
+
+//To initiate the server
+int server_init(int *listen_sock){
+    struct sockaddr_in servaddr; 
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY; 
+    servaddr.sin_port = htons(PORT);
+
+    *listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    setsockopt(*listen_sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+
+    int is_bind = bind(*listen_sock, (struct sockaddr*)&servaddr, sizeof(servaddr));
+    if ( is_bind < 0) {
+        fprintf(stderr, "Failed to bind.\n");
+        close(*listen_sock);
+        return -1;
+    }
+
+    int is_listening = listen(*listen_sock, MAX_PENDING);
+    if ( is_listening < 0) {
+        fprintf(stderr, "Failed to listen.\n");
+        close(*listen_sock);
+        return -1;
+    }
+    return 0; 
+}
