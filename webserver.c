@@ -11,9 +11,9 @@
 #define SIZE 1024  
 #define CONNECTIONS 1000
 
-
 int server_init(int *listen_sock);
 void handle_client_request(int SLOT);
+void handle_post_request(int client_socket, char *buffer, int bytes_received);
 
 int main() {
     int listen_sock = -1;
@@ -68,4 +68,31 @@ int server_init(int *listen_sock){
         return -1;
     }
     return 0; 
+}
+
+//To serve the POST Requests
+void handle_post_request(int client_sock, char *buffer, int bytes_received) {
+   char *value = malloc(sizeof(char) * bytes_received);
+  value = buffer;
+
+  printf("-------- Request Body -------- \n");
+  for (int i = 0; i < bytes_received; i++) {
+    value = buffer + i;
+    printf("%c", *value);
+  }
+
+  char response[1024];
+  char *content = "HTTP/1.1 200 OK \n";
+  
+  sprintf(response,
+          "HTTP/1.1 200 OK\r\n"
+          "Content-Type: text/html\r\n"
+          "Content-Length: %d\r\n"
+          "\r\n\n",
+          strlen(content));
+
+  send(client_sock, response, strlen(response), 0);
+  send(client_sock, content, strlen(content), 0);
+  close(client_sock);
+  free(value);
 }
