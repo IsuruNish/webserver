@@ -13,7 +13,11 @@
 
 int server_init(int *listen_sock);
 void handle_client_request(int SLOT);
-void handle_post_request(int client_socket, char *buffer, int bytes_received);
+void check_for_parameters(char *route);
+void handle_post_request(int client_socket, char *buffer,   int bytes_received);
+void handle_get_request(int client_sock, char *file_name);
+void serve_error_file(int client_sock);
+void error(int client_sock);
 
 int main() {
     int listen_sock = -1;
@@ -69,6 +73,110 @@ int server_init(int *listen_sock){
     }
     return 0; 
 }
+
+//To check the parameter in the request endpoint
+void check_for_parameters(char *route){
+  char *is_param = strrchr(route, '?');
+  if (is_param){
+    *is_param = '\0';
+  }
+}
+
+//To send the 404 error message to the client
+void error(int client_sock) {
+  char response[SIZE];
+  sprintf(response, "HTTP/1.1 505 Internal Server Error %s\r\nContent-Type: text/html\r\n\n");
+  send(client_sock, response, strlen(response), 0);
+}
+
+//To serve the 404 file 
+void serve_error_file(int client_sock) {
+  FILE *fp = fopen("common/error.html", "r");
+
+  fseek(fp, 0, SEEK_END);
+  long fsize = ftell(fp);
+  fseek(fp, 0, SEEK_SET);
+
+  char* response_data = malloc(sizeof(char) * (fsize+1));
+  char ch;
+  int i = 0;
+  while((ch = fgetc(fp)) != EOF) {
+      response_data[i] = ch;
+      i++;
+  }
+  fclose(fp);
+
+  char http_header[4096] = "HTTP/1.1 404 Not Found\r\n\r\n";
+  strcat(http_header, response_data);
+  strcat(http_header, "\r\n\r\n");
+
+  send(client_sock, http_header, sizeof(http_header), 0);
+  close(client_sock);
+  free(response_data);
+}
+
+
+//To handle all types of client requests
+void handle_client_request(int SLOT){
+    char buffer[SIZE]; 
+    int is_read = read(SLOT, buffer, SIZE);
+
+    if (is_read < 0) {
+        error(SLOT);
+        return;
+    } 
+
+    char method[10], endpoint[100], *post_data;
+    sscanf(buffer, "%s %s", method, endpoint);
+    printf("Request Type: %s \nEndpoint:%s \n\n", method, endpoint);
+
+    check_for_parameters(endpoint);
+
+    if(strcmp(method, "POST") == 0) {
+        if (strcmp(endpoint, "/api/submitForm") == 0) {
+          handle_post_request(SLOT, buffer, is_read);
+        } 
+        else if (strcmp(endpoint, "/api/update") == 0) {
+          handle_post_request(SLOT, buffer, is_read);
+        } 
+        else {
+          serve_error_file(SLOT);
+        } 
+  }
+    
+  else if (strcmp(method, "GET") == 0) {
+      if (strcmp(endpoint, "/api/getAll") == 0) {
+        handle_get_request(SLOT, endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getNames") == 0) {
+        handle_get_request(SLOT, endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getUsers") == 0) {
+        handle_get_request(SLOT, endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getImage") == 0) {
+        handle_get_request(SLOT, endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getText") == 0) {
+        handle_get_request(SLOT, endpoint);
+      } 
+      else if (strcmp(endpoint, "/api/getPDF") == 0) {
+        handle_get_request(SLOT, endpoint);
+      } 
+      else if (strcmp(endpoint, "/") == 0) {
+        handle_get_request(SLOT, endpoint);
+      } 
+      else {
+        serve_error_file(SLOT);
+      } 
+  } 
+
+  else {
+      serve_error_file(SLOT);
+  }
+  close(SLOT);
+}
+
 
 //To serve the POST Requests
 void handle_post_request(int client_sock, char *buffer, int bytes_received) {
